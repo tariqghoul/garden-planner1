@@ -12,13 +12,15 @@ import BrowseScreen from './src/screens/BrowseScreen';
 import PlantDetailScreen from './src/screens/PlantDetailScreen';
 import MyGardenScreen from './src/screens/MyGardenScreen';
 import GardenAreaScreen from './src/screens/GardenAreaScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
 
 import { COLORS } from './src/theme';
 import { GardenProvider } from './src/hooks/GardenContext';
+import { SettingsProvider } from './src/hooks/SettingsContext';
 
 // Tab icon using emoji (no extra icon library needed)
 function TabIcon({ label, focused }) {
-  const icons = { Home: '🌱', Browse: '🔍', 'My Garden': '🪴' };
+  const icons = { Home: '🌱', Browse: '🔍', 'My Garden': '🪴', Settings: '⚙️' };
   return (
     <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.45 }}>
       {icons[label] || '•'}
@@ -67,6 +69,7 @@ const Tab = createBottomTabNavigator();
 export default function App() {
   return (
     <GardenProvider>
+      <SettingsProvider>
         <NavigationContainer>
           <StatusBar style="dark" />
           <Tab.Navigator
@@ -89,8 +92,10 @@ export default function App() {
             <Tab.Screen name="Home" component={HomeStackNav} />
             <Tab.Screen name="Browse" component={BrowseStackNav} />
             <Tab.Screen name="My Garden" component={GardenStackNav} />
+            <Tab.Screen name="Settings" component={SettingsScreen} />
           </Tab.Navigator>
         </NavigationContainer>
-      </GardenProvider>
+      </SettingsProvider>
+    </GardenProvider>
   );
 }

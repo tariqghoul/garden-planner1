@@ -19,7 +19,7 @@ import {
 } from 'react-native';
 import { COLORS } from '../theme';
 import { useGarden } from '../hooks/GardenContext';
-import ALL_SEEDS from '../data/seeds.json';
+import ALL_CROPS from '../data/crops.json';
 
 // Ordered list of growth stages
 const STAGES = [
@@ -30,8 +30,8 @@ const STAGES = [
   { key: 'done',       label: 'Done',       emoji: '✅' },
 ];
 
-// Build a lookup map for seeds by id, for quick access
-const SEED_MAP = Object.fromEntries(ALL_SEEDS.map((s) => [String(s.id), s]));
+// Build a lookup map for crops by id, for quick access when tapping a plant card
+const SEED_MAP = Object.fromEntries(ALL_CROPS.map((c) => [String(c.id), c]));
 
 // ── SwipeableNoteRow ─────────────────────────────────────────
 // Renders a single user note (type === 'note') with two ways to delete:
@@ -217,7 +217,8 @@ export default function GardenAreaScreen({ navigation, route }) {
             )}
             <View style={styles.plantInfo}>
               <Text style={styles.plantName} numberOfLines={2}>
-                {plant.seedTitle.replace(/\s+seeds?$/i, '')}
+                {/* seedTitle is stored at add-time — strip old "Seeds" suffix for any legacy entries */}
+                {(plant.seedTitle || '').replace(/\s+seeds?$/i, '')}
               </Text>
               <Text style={styles.plantMeta}>
                 {plant.seedCategory}  ·  Planted {plant.plantedDate}

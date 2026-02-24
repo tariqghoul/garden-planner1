@@ -5,13 +5,13 @@
  * Works exactly like GardenContext: wrap the app in <SettingsProvider>,
  * then call useSettings() in any screen to read or update settings.
  *
- * Stored in AsyncStorage so settings survive app restarts.
+ * Stored in SQLite (via kv_store table) so settings survive app restarts.
  */
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { kvGet, kvSet } from '../database/db';
 
-const SETTINGS_KEY = '@garden_settings_v1';
+const SETTINGS_KEY = 'garden_settings';
 
 // What settings look like before the user has changed anything
 const DEFAULT_SETTINGS = {
@@ -28,7 +28,7 @@ export function SettingsProvider({ children }) {
 
   // Load saved settings from device storage when the app opens
   useEffect(() => {
-    AsyncStorage.getItem(SETTINGS_KEY)
+    kvGet(SETTINGS_KEY)
       .then((raw) => {
         if (raw) {
           // Merge with defaults so any new fields added in future updates
@@ -44,7 +44,7 @@ export function SettingsProvider({ children }) {
   function updateSettings(patch) {
     const next = { ...settings, ...patch };
     setSettings(next);
-    AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(next)).catch(console.error);
+    kvSet(SETTINGS_KEY, JSON.stringify(next)).catch(console.error);
   }
 
   return (

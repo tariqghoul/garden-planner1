@@ -9,17 +9,18 @@
 
 import React from 'react';
 import {
-  View, Text, Switch, TouchableOpacity,
+  View, Text, Switch,
   StyleSheet, SafeAreaView, ScrollView, Alert, Platform,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { kvGet, kvSet, kvRemove } from '../database/db';
 // expo-notifications is required dynamically inside functions below
 // so it never loads on web (static imports run regardless of Platform.OS checks)
 import { COLORS } from '../theme';
 import { useSettings } from '../hooks/SettingsContext';
 
-// AsyncStorage key for the daily notification ID (so we can cancel it later)
-const DAILY_NOTIF_ID_KEY = '@daily_notif_id';
+// Key for storing the daily notification ID (so we can cancel it later)
+const DAILY_NOTIF_ID_KEY = 'daily_notif_id';
 
 // ── Notification helpers ─────────────────────────────────────
 
@@ -42,27 +43,18 @@ async function scheduleDaily(hour, minute) {
     },
   });
   // Save the notification ID so we can cancel it when the user turns it off
-  await AsyncStorage.setItem(DAILY_NOTIF_ID_KEY, id);
+  await kvSet(DAILY_NOTIF_ID_KEY, id);
 }
 
 // Cancels the existing daily reminder (if any)
 async function cancelDaily() {
   if (Platform.OS === 'web') return;   // not supported in browsers
-  const id = await AsyncStorage.getItem(DAILY_NOTIF_ID_KEY);
+  const id = await kvGet(DAILY_NOTIF_ID_KEY);
   if (id) {
     const Notifications = require('expo-notifications');
     await Notifications.cancelScheduledNotificationAsync(id);
-    await AsyncStorage.removeItem(DAILY_NOTIF_ID_KEY);
+    await kvRemove(DAILY_NOTIF_ID_KEY);
   }
-}
-
-// ── Time formatting ──────────────────────────────────────────
-// Turns hour (0–23) and minute (0–59) into a readable string like "8:00 AM"
-function formatTime(hour, minute) {
-  const ampm = hour >= 12 ? 'PM' : 'AM';
-  const displayHour = hour % 12 || 12;   // convert 0 → 12, 13 → 1, etc.
-  const displayMin  = String(minute).padStart(2, '0');
-  return `${displayHour}:${displayMin} ${ampm}`;
 }
 
 // ── Screen ───────────────────────────────────────────────────
@@ -93,17 +85,22 @@ export default function SettingsScreen() {
     updateSettings({ remindersEnabled: value });
   }
 
-  // Called when the user taps − or + to change the reminder hour
-  async function handleHourChange(delta) {
-    // Cycle through 0–23 (wraps at both ends)
-    const newHour = (settings.reminderHour + delta + 24) % 24;
-    updateSettings({ reminderHour: newHour });
-
-    // If reminders are active, reschedule at the new time immediately
+  // Called when the user scrolls the drum picker to a new time.
+  // The picker gives us a full Date object — we just extract the hours and minutes.
+  async function handleTimeChange(event, selectedDate) {
+    if (!selectedDate) return;
+    const newHour   = selectedDate.getHours();
+    const newMinute = selectedDate.getMinutes();
+    updateSettings({ reminderHour: newHour, reminderMinute: newMinute });
     if (settings.remindersEnabled) {
-      await scheduleDaily(newHour, settings.reminderMinute);
+      await scheduleDaily(newHour, newMinute);
     }
   }
+
+  // Build a Date object for the picker — it needs a full Date, not just h/m.
+  // The actual date doesn't matter (it ignores it in time mode), only the time.
+  const pickerValue = new Date();
+  pickerValue.setHours(settings.reminderHour, settings.reminderMinute, 0, 0);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -138,27 +135,16 @@ export default function SettingsScreen() {
             </View>
           )}
 
-          {/* Time picker — only visible when reminders are on */}
+          {/* Drum picker — only visible when reminders are on */}
           {settings.remindersEnabled && (
-            <View style={[styles.row, styles.rowBorderTop]}>
-              <Text style={styles.rowLabel}>Reminder time</Text>
-              <View style={styles.timePicker}>
-                <TouchableOpacity
-                  onPress={() => handleHourChange(-1)}
-                  style={styles.timeBtn}
-                >
-                  <Text style={styles.timeBtnText}>−</Text>
-                </TouchableOpacity>
-                <Text style={styles.timeDisplay}>
-                  {formatTime(settings.reminderHour, settings.reminderMinute)}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => handleHourChange(1)}
-                  style={styles.timeBtn}
-                >
-                  <Text style={styles.timeBtnText}>+</Text>
-                </TouchableOpacity>
-              </View>
+            <View style={styles.pickerWrapper}>
+              <DateTimePicker
+                value={pickerValue}
+                mode="time"
+                display="spinner"    // the spinning drum wheel, same as iPhone alarm
+                onChange={handleTimeChange}
+                style={styles.picker}
+              />
             </View>
           )}
         </View>
@@ -217,37 +203,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 12,
   },
-  rowBorderTop: {
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-  },
   rowLeft: { flex: 1, marginRight: 12 },
   rowLabel: { fontSize: 15, fontWeight: '600', color: COLORS.text },
   rowSub: { fontSize: 12, color: COLORS.textLight, marginTop: 2 },
 
-  // Time adjuster: − | 8:00 AM | +
-  timePicker: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+  // Wraps the drum picker and adds a top border to separate it from the toggle
+  pickerWrapper: {
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    paddingBottom: 8,
   },
-  timeBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 8,
-    backgroundColor: COLORS.bg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  timeBtnText: { fontSize: 20, fontWeight: '700', color: COLORS.text, lineHeight: 24 },
-  timeDisplay: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.text,
-    minWidth: 78,
-    textAlign: 'center',
+  // The picker itself fills the full width of the card
+  picker: {
+    width: '100%',
   },
 
   // Info block for hot-day alerts (read-only)

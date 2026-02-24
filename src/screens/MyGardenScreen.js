@@ -12,7 +12,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, SafeAreaView,
-  FlatList, Modal, TextInput,
+  FlatList, Modal, TextInput, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
 import { COLORS } from '../theme';
 import { useGarden } from '../hooks/GardenContext';
@@ -180,7 +180,11 @@ export default function MyGardenScreen({ navigation }) {
         transparent
         onRequestClose={() => setShowCreate(false)}
       >
-        <View style={styles.overlay}>
+        {/* KeyboardAvoidingView pushes the sheet above the keyboard on iPhone */}
+        <KeyboardAvoidingView
+          style={styles.overlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
           {/* Backdrop — tapping this closes the modal */}
           <TouchableOpacity
             style={StyleSheet.absoluteFill}
@@ -194,61 +198,66 @@ export default function MyGardenScreen({ navigation }) {
               Name it anything — planter box, garden bed, pot, window box...
             </Text>
 
-            <TextInput
-              style={styles.input}
-              placeholder="e.g. Planter Box 1, South Bed, Balcony Pot..."
-              placeholderTextColor={COLORS.textLight}
-              value={newName}
-              onChangeText={setNewName}
-              autoFocus
-              returnKeyType="done"
-              onSubmitEditing={handleCreate}
-            />
-
-            <Text style={[styles.sheetSub, { marginBottom: 6 }]}>Pick an icon:</Text>
-
-            {/* Categorised emoji grid */}
-            {EMOJI_SECTIONS.map((section) => (
-              <View key={section.label}>
-                <Text style={styles.emojiSectionLabel}>{section.label}</Text>
-                <View style={[styles.emojiGrid, { marginBottom: 8 }]}>
-                  {section.emojis.map((e) => (
-                    <TouchableOpacity
-                      key={e}
-                      style={[styles.emojiBtn, newEmoji === e && styles.emojiBtnActive]}
-                      onPress={() => setNewEmoji(e)}
-                    >
-                      <Text style={{ fontSize: 26 }}>{e}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            ))}
-
-            {/* Custom emoji — type any emoji you like */}
-            <View style={styles.customEmojiRow}>
-              <Text style={styles.customEmojiLabel}>Or type any emoji:</Text>
+            {/* ScrollView lets user scroll to the button when keyboard is open */}
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <TextInput
-                style={[
-                  styles.customEmojiInput,
-                  !ALL_AREA_EMOJIS.includes(newEmoji) && styles.emojiBtnActive,
-                ]}
-                value={ALL_AREA_EMOJIS.includes(newEmoji) ? '' : newEmoji}
-                onChangeText={(text) => { if (text.trim()) setNewEmoji(text.trim()); }}
-                placeholder="🎨"
-                maxLength={8}
+                style={styles.input}
+                placeholder="e.g. Planter Box 1, South Bed, Balcony Pot..."
+                placeholderTextColor={COLORS.textLight}
+                value={newName}
+                onChangeText={setNewName}
+                autoFocus
+                returnKeyType="done"
+                onSubmitEditing={handleCreate}
               />
-            </View>
 
-            <TouchableOpacity
-              style={[styles.createBtn, !newName.trim() && { opacity: 0.4 }]}
-              onPress={handleCreate}
-              disabled={!newName.trim()}
-            >
-              <Text style={styles.createBtnText}>Create area</Text>
-            </TouchableOpacity>
+              <Text style={[styles.sheetSub, { marginBottom: 6 }]}>Pick an icon:</Text>
+
+              {/* Categorised emoji grid */}
+              {EMOJI_SECTIONS.map((section) => (
+                <View key={section.label}>
+                  <Text style={styles.emojiSectionLabel}>{section.label}</Text>
+                  <View style={[styles.emojiGrid, { marginBottom: 8 }]}>
+                    {section.emojis.map((e) => (
+                      <TouchableOpacity
+                        key={e}
+                        style={[styles.emojiBtn, newEmoji === e && styles.emojiBtnActive]}
+                        onPress={() => setNewEmoji(e)}
+                      >
+                        <Text style={{ fontSize: 26 }}>{e}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              ))}
+
+              {/* Custom emoji — type any emoji you like */}
+              <View style={styles.customEmojiRow}>
+                <Text style={styles.customEmojiLabel}>Or type any emoji:</Text>
+                <TextInput
+                  style={[
+                    styles.customEmojiInput,
+                    !ALL_AREA_EMOJIS.includes(newEmoji) && styles.emojiBtnActive,
+                  ]}
+                  value={ALL_AREA_EMOJIS.includes(newEmoji) ? '' : newEmoji}
+                  onChangeText={(text) => { if (text.trim()) setNewEmoji(text.trim()); }}
+                  placeholder="🎨"
+                  maxLength={8}
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.createBtn, !newName.trim() && { opacity: 0.4 }]}
+                onPress={handleCreate}
+                disabled={!newName.trim()}
+              >
+                <Text style={styles.createBtnText}>Create area</Text>
+              </TouchableOpacity>
+
+              <View style={{ height: 20 }} />
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ── Edit area modal ── */}
@@ -258,7 +267,10 @@ export default function MyGardenScreen({ navigation }) {
         transparent
         onRequestClose={() => setEditArea(null)}
       >
-        <View style={styles.overlay}>
+        <KeyboardAvoidingView
+          style={styles.overlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
           <TouchableOpacity
             style={StyleSheet.absoluteFill}
             activeOpacity={1}
@@ -267,63 +279,67 @@ export default function MyGardenScreen({ navigation }) {
           <View style={styles.sheet}>
             <Text style={styles.sheetTitle}>Edit area</Text>
 
-            <TextInput
-              style={styles.input}
-              value={editName}
-              onChangeText={setEditName}
-              autoFocus
-              returnKeyType="done"
-              onSubmitEditing={handleEditSave}
-            />
-
-            {/* Categorised emoji grid */}
-            {EMOJI_SECTIONS.map((section) => (
-              <View key={section.label}>
-                <Text style={styles.emojiSectionLabel}>{section.label}</Text>
-                <View style={[styles.emojiGrid, { marginBottom: 8 }]}>
-                  {section.emojis.map((e) => (
-                    <TouchableOpacity
-                      key={e}
-                      style={[styles.emojiBtn, editEmoji === e && styles.emojiBtnActive]}
-                      onPress={() => setEditEmoji(e)}
-                    >
-                      <Text style={{ fontSize: 26 }}>{e}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            ))}
-
-            {/* Custom emoji — type any emoji you like */}
-            <View style={styles.customEmojiRow}>
-              <Text style={styles.customEmojiLabel}>Or type any emoji:</Text>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <TextInput
-                style={[
-                  styles.customEmojiInput,
-                  !ALL_AREA_EMOJIS.includes(editEmoji) && styles.emojiBtnActive,
-                ]}
-                value={ALL_AREA_EMOJIS.includes(editEmoji) ? '' : editEmoji}
-                onChangeText={(text) => { if (text.trim()) setEditEmoji(text.trim()); }}
-                placeholder="🎨"
-                maxLength={8}
+                style={styles.input}
+                value={editName}
+                onChangeText={setEditName}
+                autoFocus
+                returnKeyType="done"
+                onSubmitEditing={handleEditSave}
               />
-            </View>
 
-            <TouchableOpacity
-              style={[styles.createBtn, !editName.trim() && { opacity: 0.4 }]}
-              onPress={handleEditSave}
-            >
-              <Text style={styles.createBtnText}>Save changes</Text>
-            </TouchableOpacity>
+              {/* Categorised emoji grid */}
+              {EMOJI_SECTIONS.map((section) => (
+                <View key={section.label}>
+                  <Text style={styles.emojiSectionLabel}>{section.label}</Text>
+                  <View style={[styles.emojiGrid, { marginBottom: 8 }]}>
+                    {section.emojis.map((e) => (
+                      <TouchableOpacity
+                        key={e}
+                        style={[styles.emojiBtn, editEmoji === e && styles.emojiBtnActive]}
+                        onPress={() => setEditEmoji(e)}
+                      >
+                        <Text style={{ fontSize: 26 }}>{e}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              ))}
 
-            <TouchableOpacity
-              style={styles.deleteBtn}
-              onPress={() => handleDeleteArea(editArea)}
-            >
-              <Text style={styles.deleteBtnText}>Delete this area</Text>
-            </TouchableOpacity>
+              {/* Custom emoji — type any emoji you like */}
+              <View style={styles.customEmojiRow}>
+                <Text style={styles.customEmojiLabel}>Or type any emoji:</Text>
+                <TextInput
+                  style={[
+                    styles.customEmojiInput,
+                    !ALL_AREA_EMOJIS.includes(editEmoji) && styles.emojiBtnActive,
+                  ]}
+                  value={ALL_AREA_EMOJIS.includes(editEmoji) ? '' : editEmoji}
+                  onChangeText={(text) => { if (text.trim()) setEditEmoji(text.trim()); }}
+                  placeholder="🎨"
+                  maxLength={8}
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.createBtn, !editName.trim() && { opacity: 0.4 }]}
+                onPress={handleEditSave}
+              >
+                <Text style={styles.createBtnText}>Save changes</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.deleteBtn}
+                onPress={() => handleDeleteArea(editArea)}
+              >
+                <Text style={styles.deleteBtnText}>Delete this area</Text>
+              </TouchableOpacity>
+
+              <View style={{ height: 20 }} />
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
     </SafeAreaView>

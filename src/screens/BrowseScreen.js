@@ -1,9 +1,9 @@
 /**
  * BrowseScreen.js
  * ─────────────────────────────────────────────
- * Shows all 698 plants with:
+ * Shows all crops with:
  *   - Search bar (filters by name as you type)
- *   - Category filter pills (All / Vegetable / Herb / Flower / etc.)
+ *   - Category filter pills (All / Vegetable / Herb / Legume / etc.)
  *   - Scrollable list of plant cards
  *   - "+" button to add a custom plant to the catalog with a full growing guide form
  */
@@ -11,20 +11,26 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   View, Text, TextInput, FlatList, TouchableOpacity,
-  StyleSheet, Image, SafeAreaView, Modal, ScrollView,
+  StyleSheet, SafeAreaView, Modal, ScrollView,
 } from 'react-native';
 import { COLORS } from '../theme';
-import ALL_SEEDS from '../data/seeds.json';
+import ALL_CROPS from '../data/crops.json';
 import { useGarden } from '../hooks/GardenContext';
 
+// Short month names for displaying sow hints (index 0 unused; 1 = January)
+const MONTH_NAMES = [
+  '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
 const CATEGORY_FILTERS = [
-  { key: 'All',          label: 'All',         emoji: '🌿' },
-  { key: 'Vegetable',    label: 'Vegetables',  emoji: '🥦' },
-  { key: 'Herb',         label: 'Herbs',       emoji: '🌿' },
-  { key: 'Flower',       label: 'Flowers',     emoji: '🌺' },
-  { key: 'Sprout',       label: 'Sprouts',     emoji: '🌱' },
-  { key: 'Microgreen',   label: 'Microgreens', emoji: '🥗' },
-  { key: 'Produce Bulb', label: 'Bulbs',       emoji: '🧄' },
+  { key: 'All',        label: 'All',         emoji: '🌿' },
+  { key: 'Vegetable',  label: 'Vegetables',  emoji: '🥦' },
+  { key: 'Herb',       label: 'Herbs',       emoji: '🌿' },
+  { key: 'Legume',     label: 'Legumes',     emoji: '🫘' },
+  { key: 'Fruit',      label: 'Fruit',       emoji: '🍓' },
+  { key: 'Tree',       label: 'Trees',       emoji: '🌳' },
+  { key: 'Microgreen', label: 'Microgreens', emoji: '🥗' },
 ];
 
 // The blank starting state for the "Add to catalog" form
@@ -48,11 +54,6 @@ const INITIAL_FORM = {
   spacing: '',
   companionPlants: '',
 };
-
-// Clean up seed titles for display (remove trailing " Seeds" / " Seed")
-function cleanTitle(title) {
-  return title.replace(/\s+seeds?$/i, '');
-}
 
 // Reusable pill selector — highlights the chosen option
 function PillRow({ options, value, onSelect }) {
@@ -136,55 +137,52 @@ export default function BrowseScreen({ navigation, route }) {
     }
   }, [route.params?.filterCategory]);
 
-  // Merge built-in catalog with user-added seeds
-  const allSeeds = useMemo(() => [...ALL_SEEDS, ...customSeeds], [customSeeds]);
+  // Merge built-in catalog with user-added crops
+  const allCrops = useMemo(() => [...ALL_CROPS, ...customSeeds], [customSeeds]);
 
   // Filter the combined list whenever search or category changes
   const filtered = useMemo(() => {
-    let results = allSeeds;
+    let results = allCrops;
 
     // Filter by category
     if (activeCategory !== 'All') {
       results = results.filter((s) => s.category === activeCategory);
     }
 
-    // Filter by search text
+    // Filter by search text — uses 'name' (new schema) with 'title' as fallback for custom entries
     const q = search.trim().toLowerCase();
     if (q) {
       results = results.filter((s) =>
-        s.title.toLowerCase().includes(q) ||
+        (s.name || s.title || '').toLowerCase().includes(q) ||
         (s.scientific_name || '').toLowerCase().includes(q) ||
         (s.description || '').toLowerCase().includes(q)
       );
     }
 
     return results;
-  }, [search, activeCategory, allSeeds]);
+  }, [search, activeCategory, allCrops]);
 
   function renderPlant({ item }) {
+    // Show sow months as a season hint (e.g. "Sow: Sep · Oct")
+    const sowHint = item.sow_months?.length > 0
+      ? 'Sow: ' + item.sow_months.slice(0, 3).map((m) => MONTH_NAMES[m]).join(' · ')
+      : null;
+
     return (
       <TouchableOpacity
         style={styles.card}
         onPress={() => navigation.navigate('PlantDetail', { plant: item })}
         activeOpacity={0.75}
       >
-        {/* Plant image */}
-        {item.image_url ? (
-          <Image
-            source={{ uri: item.image_url }}
-            style={styles.cardImage}
-            resizeMode="cover"
-          />
-        ) : (
-          <View style={[styles.cardImage, styles.cardImageFallback]}>
-            <Text style={{ fontSize: 30 }}>🌱</Text>
-          </View>
-        )}
+        {/* Emoji fallback — crops.json uses emoji instead of image URLs */}
+        <View style={[styles.cardImage, styles.cardImageFallback]}>
+          <Text style={{ fontSize: 30 }}>{item.emoji || '🌱'}</Text>
+        </View>
 
         {/* Plant info */}
         <View style={styles.cardBody}>
           <Text style={styles.cardTitle} numberOfLines={2}>
-            {cleanTitle(item.title)}
+            {item.name || item.title}
           </Text>
           {item.scientific_name && (
             <Text style={styles.cardScientific} numberOfLines={1}>
@@ -193,15 +191,13 @@ export default function BrowseScreen({ navigation, route }) {
           )}
           <View style={styles.cardMeta}>
             <Text style={styles.categoryPill}>{item.category}</Text>
-            {item.planting_seasons?.length > 0 && (
-              <Text style={styles.seasonPill}>
-                {item.planting_seasons.slice(0, 2).join(' · ')}
-              </Text>
+            {sowHint && (
+              <Text style={styles.seasonPill}>{sowHint}</Text>
             )}
           </View>
-          {item.days_to_harvest && (
+          {item.weeks_to_harvest && (
             <Text style={styles.cardDetail}>
-              🗓 {item.days_to_harvest} to harvest
+              🗓 {item.weeks_to_harvest} weeks to harvest
             </Text>
           )}
         </View>

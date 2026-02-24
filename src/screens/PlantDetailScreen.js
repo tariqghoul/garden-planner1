@@ -10,7 +10,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Image,
-  StyleSheet, SafeAreaView, Modal, TextInput,
+  StyleSheet, SafeAreaView, Modal, TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { COLORS } from '../theme';
 import { useGarden } from '../hooks/GardenContext';
@@ -24,11 +24,23 @@ const STAGES = [
   { key: 'done',       label: 'Done',       emoji: '✅' },
 ];
 
-// Maps category to a fallback emoji
+// Maps category to a fallback emoji (used only if the crop has no emoji field)
 const CAT_EMOJI = {
-  Vegetable: '🥦', Herb: '🌿', Flower: '🌺',
-  Sprout: '🌱', Microgreen: '🥗', 'Produce Bulb': '🧄',
+  Vegetable: '🥦', Herb: '🌿', Legume: '🫘',
+  Fruit: '🍓', Tree: '🌳', Microgreen: '🥗',
 };
+
+// Short month names for displaying sow/plant/harvest months
+const MONTH_NAMES = [
+  '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+// Convert an array of month numbers like [9, 10, 11] → "Sep · Oct · Nov"
+function formatMonths(arr) {
+  if (!arr?.length) return null;
+  return arr.map((m) => MONTH_NAMES[m]).join(' · ');
+}
 
 function InfoRow({ icon, label, value }) {
   const empty = !value;
@@ -84,16 +96,22 @@ export default function PlantDetailScreen({ navigation, route }) {
     setAddedMsg(`Created "${area.name}" and added plant ✓`);
   }
 
-  const cleanTitle = plant.title.replace(/\s+seeds?$/i, '');
+  // Support both new crops.json (plant.name) and custom user-added seeds (plant.title)
+  const plantName = plant.name || (plant.title || '').replace(/\s+seeds?$/i, '');
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      {/* Back button lives outside the ScrollView so it stays visible when scrolled down.
+          hitSlop extends the invisible tap area so it's easier to hit reliably. */}
+      <TouchableOpacity
+        style={styles.backBtn}
+        onPress={() => { if (navigation.canGoBack()) navigation.goBack(); }}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 40 }}
+      >
+        <Text style={styles.backText}>‹ Back</Text>
+      </TouchableOpacity>
 
-        {/* ── Back button ── */}
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Text style={styles.backText}>‹ Back</Text>
-        </TouchableOpacity>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
         {/* ── Hero image ── */}
         {plant.image_url ? (
@@ -104,7 +122,8 @@ export default function PlantDetailScreen({ navigation, route }) {
           />
         ) : (
           <View style={[styles.heroImage, styles.heroFallback]}>
-            <Text style={{ fontSize: 72 }}>{CAT_EMOJI[plant.category] || '🌱'}</Text>
+            {/* Use the crop's own emoji first, then category fallback */}
+            <Text style={{ fontSize: 72 }}>{plant.emoji || CAT_EMOJI[plant.category] || '🌱'}</Text>
           </View>
         )}
 
@@ -113,7 +132,7 @@ export default function PlantDetailScreen({ navigation, route }) {
           {/* ── Title block ── */}
           <View style={styles.titleBlock}>
             <Text style={styles.category}>{plant.category}</Text>
-            <Text style={styles.title}>{cleanTitle}</Text>
+            <Text style={styles.title}>{plantName}</Text>
             {plant.scientific_name && (
               <Text style={styles.scientific}>{plant.scientific_name}</Text>
             )}
@@ -143,210 +162,236 @@ export default function PlantDetailScreen({ navigation, route }) {
           ) : null}
 
           {/* ── Growing info ── */}
-          {(() => {
-            // Count how many of the 16 guide fields actually have data
-            const textFields = [
-              plant.sun_requirements,
-              plant.planting_seasons?.join(', '),
-              plant.best_months,
-              plant.days_to_harvest,
-              plant.days_to_germination,
-              plant.sowing_depth,
-              plant.spacing,
-              plant.plant_height,
-              plant.plant_life,
-              plant.frost_tolerance,
-              plant.watering,
-              plant.difficulty,
-              plant.companion_plants,
-            ];
-            const boolFields = [
-              plant.suitable_for_containers,
-              plant.drought_tolerant,
-              plant.requires_trellis,
-            ];
-            const filled = textFields.filter(Boolean).length
-                         + boolFields.filter(Boolean).length;
-            const total  = textFields.length + boolFields.length;
-            const empty  = total - filled;
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Growing Guide</Text>
+            <View style={styles.infoCard}>
+              {/* ── When to grow ── */}
+              <InfoRow icon="🌰"  label="Sow from seed"        value={formatMonths(plant.sow_months)} />
+              <InfoRow icon="🌱"  label="Plant seedlings"      value={formatMonths(plant.plant_months)} />
+              <InfoRow icon="🍽️" label="Harvest"              value={formatMonths(plant.harvest_months)} />
 
-            return (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Growing Guide</Text>
-                <Text style={styles.fieldCount}>
-                  {empty === 0
-                    ? 'All fields complete'
-                    : `${empty} of ${total} fields are empty`}
-                </Text>
-                <View style={styles.infoCard}>
-                  <InfoRow icon="☀️"  label="Sun requirements"    value={plant.sun_requirements} />
-                  <InfoRow icon="📅"  label="Planting seasons"    value={plant.planting_seasons?.join(', ')} />
-                  <InfoRow icon="📆"  label="Best months to plant" value={plant.best_months} />
-                  <InfoRow icon="🗓"  label="Days to harvest"     value={plant.days_to_harvest} />
-                  <InfoRow icon="🌿"  label="Days to germinate"   value={plant.days_to_germination} />
-                  <InfoRow icon="📏"  label="Sowing depth"        value={plant.sowing_depth} />
-                  <InfoRow icon="↔️"  label="Plant spacing"       value={plant.spacing} />
-                  <InfoRow icon="📐"  label="Plant height"        value={plant.plant_height} />
-                  <InfoRow icon="🔄"  label="Plant life"          value={plant.plant_life} />
-                  <InfoRow icon="❄️"  label="Frost tolerance"     value={plant.frost_tolerance} />
-                  <InfoRow icon="💧"  label="Watering"            value={plant.watering} />
-                  <InfoRow icon="⭐"  label="Difficulty"          value={plant.difficulty} />
-                  <InfoRow icon="🪴"  label="Container growing"
-                    value={plant.suitable_for_containers ? 'Suitable for pots' : 'Not recommended for pots'}
-                  />
-                  <InfoRow icon="🏜️" label="Drought tolerance"
-                    value={plant.drought_tolerant ? 'Drought tolerant once established' : 'Needs regular water'}
-                  />
-                  <InfoRow icon="🪢"  label="Trellis"
-                    value={plant.requires_trellis ? 'Requires trellis support' : 'No trellis needed'}
-                  />
-                  <InfoRow icon="🤝"  label="Companion plants"   value={plant.companion_plants} />
-                </View>
+              {/* ── Basic growing needs ── */}
+              <InfoRow icon="☀️"  label="Sun"                  value={plant.sun || plant.sun_requirements} />
+              <InfoRow icon="💧"  label="Watering"             value={plant.water || plant.watering} />
+              <InfoRow icon="⭐"  label="Difficulty"           value={plant.difficulty} />
+              <InfoRow icon="🔄"  label="Plant life"           value={plant.plant_life} />
+
+              {/* ── Timing numbers ── */}
+              <InfoRow icon="🌿"  label="Days to germinate"
+                value={plant.days_to_germination ? `${plant.days_to_germination} days` : null} />
+              <InfoRow icon="🗓"  label="Weeks to harvest"
+                value={plant.weeks_to_harvest ? `${plant.weeks_to_harvest} weeks` : plant.days_to_harvest} />
+              {plant.years_to_first_harvest && (
+                <InfoRow icon="🌳" label="Years to first harvest"
+                  value={`${plant.years_to_first_harvest} year${plant.years_to_first_harvest > 1 ? 's' : ''}`} />
+              )}
+
+              {/* ── Planting numbers ── */}
+              <InfoRow icon="📏"  label="Sowing depth"
+                value={plant.sowing_depth_mm ? `${plant.sowing_depth_mm} mm` : plant.sowing_depth} />
+              <InfoRow icon="↔️"  label="Plant spacing"
+                value={plant.spacing_cm ? `${plant.spacing_cm} cm` : plant.spacing} />
+              <InfoRow icon="📐"  label="Plant height"
+                value={plant.height_cm ? `${plant.height_cm} cm` : plant.plant_height} />
+
+              {/* ── Conditions ── */}
+              <InfoRow icon="❄️"  label="Frost tolerance"
+                value={
+                  plant.frost_tolerant !== undefined
+                    ? (plant.frost_tolerant ? 'Frost tolerant' : 'Frost tender — protect from frost')
+                    : plant.frost_tolerance
+                }
+              />
+              <InfoRow icon="🪴"  label="Container growing"
+                value={
+                  plant.suitable_for_containers !== undefined
+                    ? (plant.suitable_for_containers
+                        ? `Suitable for pots${plant.min_pot_size_L ? ` (min ${plant.min_pot_size_L}L)` : ''}`
+                        : 'Not recommended for pots')
+                    : null
+                }
+              />
+              <InfoRow icon="🏜️" label="Drought tolerance"
+                value={plant.drought_tolerant ? 'Drought tolerant once established' : 'Needs regular water'} />
+              <InfoRow icon="🪢"  label="Trellis"
+                value={plant.requires_trellis ? 'Requires trellis or support' : 'No trellis needed'} />
+
+              {/* ── Companions ── */}
+              <InfoRow icon="🤝"  label="Companion plants"
+                value={
+                  plant.companions?.join(', ') ||
+                  (Array.isArray(plant.companion_plants) ? plant.companion_plants.join(', ') : plant.companion_plants)
+                }
+              />
+              <InfoRow icon="⚠️"  label="Keep away from"
+                value={plant.avoid?.join(', ')} />
+            </View>
+          </View>
+
+          {/* ── Tips ── */}
+          {plant.tips && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Growing Tips</Text>
+              <Text style={styles.description}>{plant.tips}</Text>
+            </View>
+          )}
+
+          {/* ── Common problems ── */}
+          {plant.common_problems?.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Common Problems</Text>
+              <View style={styles.infoCard}>
+                {plant.common_problems.map((problem, i) => (
+                  <View key={i} style={styles.infoRow}>
+                    <Text style={styles.infoIcon}>🐛</Text>
+                    <View style={styles.infoText}>
+                      <Text style={styles.infoValue}>{problem}</Text>
+                    </View>
+                  </View>
+                ))}
               </View>
-            );
-          })()}
+            </View>
+          )}
 
 
 
         </View>
       </ScrollView>
 
-      {/* ── "Add to Garden" modal ── */}
+      {/* ── Single modal: toggles between "pick area" and "create area" views ──
+          iOS does not support two stacked modals — merging into one avoids
+          touch-blocking bugs that occur when a second Modal opens over the first. */}
       <Modal
         visible={showModal}
         animationType="slide"
         transparent
-        onRequestClose={() => setShowModal(false)}
+        onRequestClose={() => { setShowModal(false); setShowNewArea(false); setNewAreaName(''); }}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
           <TouchableOpacity
             style={StyleSheet.absoluteFill}
             activeOpacity={1}
-            onPress={() => setShowModal(false)}
+            onPress={() => { setShowModal(false); setShowNewArea(false); setNewAreaName(''); }}
           />
-          <View style={styles.modalSheet}>
-            <Text style={styles.modalTitle}>Add to which area?</Text>
-            <Text style={styles.modalSub}>
-              Choose an existing garden area or create a new one.
-            </Text>
 
-            {areas.length === 0 && (
-              <Text style={styles.noAreas}>
-                You haven't created any garden areas yet.
-              </Text>
-            )}
-
-            {areas.map((area) => (
+          {showNewArea ? (
+            // ── View 2: Create new area form ──────────────────────────────
+            <View style={styles.modalSheet}>
+              {/* Back link returns to the area picker without closing the modal */}
               <TouchableOpacity
-                key={area.id}
-                style={styles.areaRow}
-                onPress={() => handleAddToArea(area)}
+                onPress={() => { setShowNewArea(false); setNewAreaName(''); setNewAreaEmoji('🪴'); }}
+                style={styles.backToPickerBtn}
               >
-                <Text style={styles.areaEmoji}>{area.emoji}</Text>
-                <View style={styles.areaInfo}>
-                  <Text style={styles.areaName}>{area.name}</Text>
-                  <Text style={styles.areaCount}>
-                    {area.plants.length} plant{area.plants.length !== 1 ? 's' : ''}
-                  </Text>
-                </View>
-                <Text style={styles.areaArrow}>+</Text>
+                <Text style={styles.backToPickerText}>‹ Back</Text>
               </TouchableOpacity>
-            ))}
 
-            {/* Create new area inline */}
-            <TouchableOpacity
-              style={styles.newAreaBtn}
-              onPress={() => setShowNewArea(true)}
-            >
-              <Text style={styles.newAreaBtnText}>＋  Create new area</Text>
-            </TouchableOpacity>
+              <Text style={styles.modalTitle}>New garden area</Text>
+              <Text style={styles.modalSub}>Give it a name — anything you like!</Text>
 
-            <TouchableOpacity
-              style={styles.cancelBtn}
-              onPress={() => setShowModal(false)}
-            >
-              <Text style={styles.cancelBtnText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+              {/* ScrollView so emoji picker + button are reachable above keyboard */}
+              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                <TextInput
+                  style={styles.areaInput}
+                  placeholder="e.g. Planter Box 1, Back Pot, Raised Bed..."
+                  placeholderTextColor={COLORS.textLight}
+                  value={newAreaName}
+                  onChangeText={setNewAreaName}
+                  autoFocus
+                />
 
-      {/* ── "Create new area" mini-modal ── */}
-      <Modal
-        visible={showNewArea}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setShowNewArea(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity
-            style={StyleSheet.absoluteFill}
-            activeOpacity={1}
-            onPress={() => setShowNewArea(false)}
-          />
-          <View style={[styles.modalSheet, { paddingBottom: 30 }]}>
-            <Text style={styles.modalTitle}>New garden area</Text>
-            <Text style={styles.modalSub}>
-              Give it a name — anything you like!
-            </Text>
+                <Text style={[styles.modalSub, { marginBottom: 6 }]}>Pick an icon:</Text>
+                {EMOJI_SECTIONS.map((section) => (
+                  <View key={section.label}>
+                    <Text style={styles.emojiSectionLabel}>{section.label}</Text>
+                    <View style={[styles.emojiRow, { marginBottom: 6 }]}>
+                      {section.emojis.map((e) => (
+                        <TouchableOpacity
+                          key={e}
+                          style={[styles.emojiOption, newAreaEmoji === e && styles.emojiOptionActive]}
+                          onPress={() => setNewAreaEmoji(e)}
+                        >
+                          <Text style={{ fontSize: 24 }}>{e}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                ))}
 
-            <TextInput
-              style={styles.areaInput}
-              placeholder="e.g. Planter Box 1, Back Pot, Raised Bed..."
-              placeholderTextColor={COLORS.textLight}
-              value={newAreaName}
-              onChangeText={setNewAreaName}
-              autoFocus
-            />
-
-            {/* Emoji picker — categorised sections */}
-            <Text style={[styles.modalSub, { marginBottom: 6 }]}>
-              Pick an icon:
-            </Text>
-            {EMOJI_SECTIONS.map((section) => (
-              <View key={section.label}>
-                <Text style={styles.emojiSectionLabel}>{section.label}</Text>
-                <View style={[styles.emojiRow, { marginBottom: 6 }]}>
-                  {section.emojis.map((e) => (
-                    <TouchableOpacity
-                      key={e}
-                      style={[styles.emojiOption, newAreaEmoji === e && styles.emojiOptionActive]}
-                      onPress={() => setNewAreaEmoji(e)}
-                    >
-                      <Text style={{ fontSize: 24 }}>{e}</Text>
-                    </TouchableOpacity>
-                  ))}
+                <View style={styles.customEmojiRow}>
+                  <Text style={styles.customEmojiLabel}>Or type any emoji:</Text>
+                  <TextInput
+                    style={[
+                      styles.customEmojiInput,
+                      !ALL_AREA_EMOJIS.includes(newAreaEmoji) && styles.emojiOptionActive,
+                    ]}
+                    value={ALL_AREA_EMOJIS.includes(newAreaEmoji) ? '' : newAreaEmoji}
+                    onChangeText={(text) => { if (text.trim()) setNewAreaEmoji(text.trim()); }}
+                    placeholder="🎨"
+                    maxLength={8}
+                  />
                 </View>
-              </View>
-            ))}
 
-            {/* Custom emoji — type any emoji */}
-            <View style={styles.customEmojiRow}>
-              <Text style={styles.customEmojiLabel}>Or type any emoji:</Text>
-              <TextInput
-                style={[
-                  styles.customEmojiInput,
-                  !ALL_AREA_EMOJIS.includes(newAreaEmoji) && styles.emojiOptionActive,
-                ]}
-                value={ALL_AREA_EMOJIS.includes(newAreaEmoji) ? '' : newAreaEmoji}
-                onChangeText={(text) => { if (text.trim()) setNewAreaEmoji(text.trim()); }}
-                placeholder="🎨"
-                maxLength={8}
-              />
+                <TouchableOpacity
+                  style={[styles.addBtn, !newAreaName.trim() && { opacity: 0.4 }]}
+                  onPress={handleCreateAndAdd}
+                  disabled={!newAreaName.trim()}
+                >
+                  <Text style={styles.addBtnText}>Create and add plant</Text>
+                </TouchableOpacity>
+
+                <View style={{ height: 20 }} />
+              </ScrollView>
             </View>
+          ) : (
+            // ── View 1: Pick an existing area ─────────────────────────────
+            <View style={styles.modalSheet}>
+              <Text style={styles.modalTitle}>Add to which area?</Text>
+              <Text style={styles.modalSub}>
+                Choose an existing garden area or create a new one.
+              </Text>
 
-            <TouchableOpacity
-              style={[
-                styles.addBtn,
-                !newAreaName.trim() && { opacity: 0.4 },
-              ]}
-              onPress={handleCreateAndAdd}
-              disabled={!newAreaName.trim()}
-            >
-              <Text style={styles.addBtnText}>Create and add plant</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+              {areas.length === 0 && (
+                <Text style={styles.noAreas}>
+                  You haven't created any garden areas yet.
+                </Text>
+              )}
+
+              {areas.map((area) => (
+                <TouchableOpacity
+                  key={area.id}
+                  style={styles.areaRow}
+                  onPress={() => handleAddToArea(area)}
+                >
+                  <Text style={styles.areaEmoji}>{area.emoji}</Text>
+                  <View style={styles.areaInfo}>
+                    <Text style={styles.areaName}>{area.name}</Text>
+                    <Text style={styles.areaCount}>
+                      {area.plants.length} plant{area.plants.length !== 1 ? 's' : ''}
+                    </Text>
+                  </View>
+                  <Text style={styles.areaArrow}>+</Text>
+                </TouchableOpacity>
+              ))}
+
+              <TouchableOpacity
+                style={styles.newAreaBtn}
+                onPress={() => setShowNewArea(true)}
+              >
+                <Text style={styles.newAreaBtnText}>＋  Create new area</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setShowModal(false)}
+              >
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -356,8 +401,8 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.bg },
   scroll: { paddingBottom: 40 },
 
-  backBtn: { padding: 16 },
-  backText: { fontSize: 16, color: COLORS.primary, fontWeight: '600' },
+  backBtn: { paddingHorizontal: 16, paddingVertical: 14, alignSelf: 'flex-start' },
+  backText: { fontSize: 17, color: COLORS.primary, fontWeight: '600' },
 
   heroImage: { width: '100%', height: 240 },
   heroFallback: {
@@ -454,6 +499,8 @@ const styles = StyleSheet.create({
   },
   modalTitle: { fontSize: 20, fontWeight: '800', color: COLORS.text, marginBottom: 4 },
   modalSub: { fontSize: 13, color: COLORS.textLight, marginBottom: 16 },
+  backToPickerBtn: { marginBottom: 8 },
+  backToPickerText: { fontSize: 15, color: COLORS.primary, fontWeight: '600' },
   noAreas: { color: COLORS.textLight, fontStyle: 'italic', marginBottom: 12 },
 
   areaRow: {

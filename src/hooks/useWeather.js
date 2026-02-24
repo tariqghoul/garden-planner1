@@ -15,12 +15,12 @@
 
 import { useState, useEffect } from 'react';
 import { Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { kvGet, kvSet } from '../database/db';
 // expo-location and expo-notifications are required dynamically inside functions
 // — both packages have web issues and must never load at module init time
 
-const LOCATION_CACHE_KEY  = '@last_known_location';
-const HOT_ALERT_DATE_KEY  = '@last_hot_alert_date';
+const LOCATION_CACHE_KEY  = 'last_known_location';
+const HOT_ALERT_DATE_KEY  = 'last_hot_alert_date';
 const HOT_DAY_THRESHOLD   = 35;   // °C — send a "water tonight" alert above this
 
 // ── WMO weather code → human-readable condition ─────────────
@@ -48,7 +48,7 @@ async function maybeScheduleHotAlert(tomorrowMax) {
 
   // Check if we already sent the alert today — avoid duplicate notifications
   try {
-    const lastSent = await AsyncStorage.getItem(HOT_ALERT_DATE_KEY);
+    const lastSent = await kvGet(HOT_ALERT_DATE_KEY);
     if (lastSent === today) return;
   } catch (_) { /* ignore storage errors */ }
 
@@ -75,7 +75,7 @@ async function maybeScheduleHotAlert(tomorrowMax) {
     });
 
     // Mark today as done so we don't schedule again if the app is reopened
-    await AsyncStorage.setItem(HOT_ALERT_DATE_KEY, today);
+    await kvSet(HOT_ALERT_DATE_KEY, today);
   } catch (_) {
     // Silently skip if notifications aren't permitted — no crash
   }
@@ -150,7 +150,7 @@ export function useWeather() {
 
     // ── Step 1: Show cached location instantly while we fetch a fresh one ──
     try {
-      const cached = await AsyncStorage.getItem(LOCATION_CACHE_KEY);
+      const cached = await kvGet(LOCATION_CACHE_KEY);
       if (cached) {
         const { latitude, longitude, cityName } = JSON.parse(cached);
         // Don't await — let the cached fetch run in background
@@ -179,10 +179,7 @@ export function useWeather() {
         place?.suburb || place?.city || place?.region || 'Your location';
 
       // ── Step 5: Save to cache so next launch is instant ──
-      await AsyncStorage.setItem(
-        LOCATION_CACHE_KEY,
-        JSON.stringify({ latitude, longitude, cityName })
-      );
+      await kvSet(LOCATION_CACHE_KEY, JSON.stringify({ latitude, longitude, cityName }));
 
       // ── Step 6: Fetch fresh weather ──
       await fetchAndApply(latitude, longitude, cityName);
